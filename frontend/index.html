@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeafGuard AI - Plant Disease Detection</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        // Set theme on initial load
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+
+    <style>
+        /* Custom Styles for Liquid/Glassmorphism UI */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e0e7ff; /* Light violet fallback */
+            /* Vibrant Mesh Gradient Background */
+            background-image: radial-gradient(at 40% 20%, hsla(216,74%,65%,0.3) 0px, transparent 50%),
+                              radial-gradient(at 80% 0%, hsla(168,76%,74%,0.3) 0px, transparent 50%),
+                              radial-gradient(at 0% 50%, hsla(212,81%,79%,0.3) 0px, transparent 50%),
+                              radial-gradient(at 80% 50%, hsla(338,78%,75%,0.3) 0px, transparent 50%),
+                              radial-gradient(at 0% 100%, hsla(27,82%,74%,0.3) 0px, transparent 50%),
+                              radial-gradient(at 80% 100%, hsla(240,70%,75%,0.3) 0px, transparent 50%),
+                              radial-gradient(at 0% 0%, hsla(343,76%,77%,0.3) 0px, transparent 50%);
+            background-attachment: fixed;
+            transition: background-color 0.5s ease;
+        }
+
+        .dark body {
+            background-color: #0f172a; /* Slate 900 */
+            /* Dark mode gradient */
+            background-image: radial-gradient(at 40% 20%, hsla(216,74%,55%,0.15) 0px, transparent 50%),
+                              radial-gradient(at 80% 0%, hsla(168,76%,64%,0.15) 0px, transparent 50%),
+                              radial-gradient(at 0% 50%, hsla(212,81%,69%,0.15) 0px, transparent 50%);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background-color 0.5s ease, border-color 0.5s ease;
+        }
+
+        .dark .glass-card {
+            background: rgba(30, 41, 59, 0.4); /* Slate 800 with transparency */
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        /* Nav Link Styling */
+        .nav-link {
+            position: relative;
+            z-index: 1;
+            transition: color 0.3s ease;
+        }
+
+        .nav-link.active {
+            color: #1d4ed8; /* blue-700 */
+        }
+        .dark .nav-link.active {
+             color: #60a5fa; /* blue-400 */
+        }
+
+        /* Mobile Nav Active State */
+        .md\\:hidden .nav-link.active {
+             background-color: rgba(255, 255, 255, 0.2);
+        }
+        .dark .md\\:hidden .nav-link.active {
+             background-color: rgba(51, 65, 85, 0.4);
+        }
+
+        /* Liquid Indicator for Desktop Nav */
+        #desktop-nav::before {
+            content: '';
+            position: absolute;
+            top: 0.5rem; /* Corresponds to p-2 */
+            bottom: 0.5rem; /* Corresponds to p-2 */
+            left: var(--indicator-left, 0.5rem);
+            width: var(--indicator-width, 0px);
+            background-color: rgba(255, 255, 255, 0.4);
+            border-radius: 9999px;
+            transition: left 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55), width 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            z-index: 0;
+        }
+
+        .dark #desktop-nav::before {
+             background-color: rgba(51, 65, 85, 0.5);
+        }
+
+        .page { display: none; }
+        .page.active { display: block; }
+
+        .fade-in {
+            animation: fadeIn 0.8s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .file-drop-area.drag-over {
+            transform: scale(1.02);
+            box-shadow: 0 0 25px rgba(66, 153, 225, 0.4);
+        }
+    </style>
+</head>
+<body class="text-gray-800 dark:text-gray-200">
+
+    <div class="min-h-screen flex flex-col p-4 sm:p-6 lg:p-8">
+        <!-- Header -->
+        <header class="glass-card rounded-2xl shadow-lg sticky top-0 z-50 mb-8">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-20">
+                    <div class="flex items-center space-x-3 cursor-pointer" onclick="location.reload()">
+                        <i class="fas fa-leaf text-3xl text-green-500"></i>
+                        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">LeafGuard AI</h1>
+                    </div>
+                    <nav id="desktop-nav" class="hidden md:flex items-center space-x-2 bg-white/20 dark:bg-slate-900/30 p-2 rounded-full relative">
+                        <a href="#" class="nav-link text-gray-700 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold rounded-full px-5 py-2" data-page="home">Home</a>
+                        <a href="#" class="nav-link text-gray-700 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold rounded-full px-5 py-2" data-page="history">History</a>
+                        <a href="#" class="nav-link text-gray-700 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold rounded-full px-5 py-2" data-page="analytics">Analytics</a>
+                        <a href="#" class="nav-link text-gray-700 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold rounded-full px-5 py-2" data-page="developer">Developer</a>
+                    </nav>
+                    <div class="flex items-center">
+                        <button id="theme-toggle" class="px-3 py-3 text-lg font-semibold border-2 border-white/50 dark:border-slate-700/50 rounded-full shadow-md hover:bg-white/30 dark:hover:bg-slate-700/50 transition-colors bg-white/10 dark:bg-slate-800/20">
+                            <i class="fas fa-sun block dark:hidden"></i>
+                            <i class="fas fa-moon hidden dark:block"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow container mx-auto">
+            <!-- Home Page -->
+            <div id="home-page" class="page">
+                <div class="text-center mb-10">
+                    <h2 class="text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-5xl">Detect Plant Diseases Instantly</h2>
+                    <p class="mt-4 max-w-2xl mx-auto text-xl text-gray-600 dark:text-gray-400">Upload a leaf image and let our AI analyze it for diseases.</p>
+                </div>
+
+                <div class="max-w-4xl mx-auto glass-card rounded-3xl shadow-xl p-6 sm:p-10">
+                    <!-- Image Upload Section -->
+                    <div id="file-drop-area" class="border-2 border-dashed border-white/50 dark:border-slate-600/50 rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 bg-white/10 dark:bg-slate-800/20 hover:bg-white/20 dark:hover:bg-slate-700/30">
+                        <div class="flex flex-col items-center">
+                            <i class="fas fa-cloud-upload-alt text-6xl text-blue-500"></i>
+                            <p class="mt-4 text-xl text-gray-700 dark:text-gray-300">
+                                <span class="font-semibold text-blue-600 dark:text-blue-400">Click to upload</span> or drag and drop
+                            </p>
+                            <p class="mt-2 text-md text-gray-500 dark:text-gray-400">PNG, JPG, or JPEG</p>
+                        </div>
+                        <input type="file" id="file-input" class="hidden" accept="image/png, image/jpeg, image/jpg">
+                    </div>
+
+                    <!-- Prediction Result Section -->
+                    <div id="result-section" class="mt-10 hidden">
+                        <h3 class="text-3xl font-semibold mb-6 text-center text-gray-900 dark:text-white">Analysis Result</h3>
+                        <div id="result-container" class="glass-card rounded-2xl shadow-lg p-6 flex flex-col md:flex-row items-start space-y-6 md:space-y-0 md:space-x-8">
+                            <div class="w-full md:w-1/3 flex-shrink-0">
+                                <img id="image-preview" src="" alt="Uploaded Leaf" class="rounded-xl shadow-lg max-h-80 w-full object-cover">
+                            </div>
+                            <div id="result-details" class="w-full md:w-2/3">
+                                <!-- Loading/Result content here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Page -->
+            <div id="history-page" class="page">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-4xl font-bold text-gray-900 dark:text-white">Prediction History</h2>
+                    <button id="clear-history-btn" class="px-6 py-3 text-base font-semibold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full hover:from-red-600 hover:to-pink-600 shadow-lg disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transform hover:scale-105 transition-transform">
+                        <i class="fas fa-trash-alt mr-2"></i><span>Clear History</span>
+                    </button>
+                </div>
+                <div id="history-gallery" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                    <!-- History items will be injected here -->
+                </div>
+                <div id="no-history-msg" class="text-center py-20 hidden">
+                     <i class="fas fa-box-open text-7xl text-gray-400 dark:text-gray-600"></i>
+                    <p class="mt-6 text-2xl text-gray-500 dark:text-gray-400">No history yet. Start analyzing!</p>
+                </div>
+            </div>
+
+            <!-- Analytics Page -->
+            <div id="analytics-page" class="page">
+                <h2 class="text-4xl font-bold mb-8 text-center text-gray-900 dark:text-white">Analytics Dashboard</h2>
+                <div class="max-w-5xl mx-auto glass-card p-6 sm:p-8 rounded-3xl shadow-xl">
+                    <canvas id="analytics-chart" style="max-height: 500px;"></canvas>
+                </div>
+            </div>
+
+            <!-- Developer Page -->
+            <div id="developer-page" class="page">
+                <div class="max-w-4xl mx-auto fade-in">
+                    <div class="glass-card rounded-3xl shadow-xl p-8 md:p-12 text-center">
+                        <img src="" alt="Ch Sai Kaushik" class="w-32 h-32 rounded-full mx-auto mb-4 border-4 border-white/50 dark:border-slate-600/50 shadow-lg" onerror="this.onerror=null;this.src='https://placehold.co/128x128/7dd3fc/1e293b?text=SK';">
+                        <h2 class="text-4xl font-bold text-gray-900 dark:text-white">Ch Sai Kaushik</h2>
+                        <p class="text-xl text-blue-600 dark:text-blue-400 font-semibold mt-1">Full-Stack Developer</p>
+                         <p class="text-md text-gray-600 dark:text-gray-400 mt-1">Frontend & Backend Development, AI/ML Integration</p>
+
+                        <p class="mt-6 max-w-2xl mx-auto text-lg text-gray-700 dark:text-gray-300">
+                           “I am a passionate Full-Stack Developer with a focus on integrating AI/ML into practical web applications. I enjoy building interactive, user-friendly projects and contributing to innovative solutions in technology and smart agriculture.”
+                        </p>
+
+                        <div class="mt-8">
+                            <h3 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Tech Stack</h3>
+                            <div class="flex flex-wrap justify-center gap-3">
+                                <span class="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 text-sm font-semibold px-4 py-2 rounded-full">Java</span>
+                                <span class="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 text-sm font-semibold px-4 py-2 rounded-full">Python</span>
+                                <span class="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 text-sm font-semibold px-4 py-2 rounded-full">React.js</span>
+                                <span class="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 text-sm font-semibold px-4 py-2 rounded-full">Spring Boot</span>
+                                <span class="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 text-sm font-semibold px-4 py-2 rounded-full">FastAPI</span>
+                                <span class="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 text-sm font-semibold px-4 py-2 rounded-full">Tailwind CSS</span>
+                            </div>
+                        </div>
+
+                        <div class="mt-10 border-t border-white/50 dark:border-slate-700/50 pt-8">
+                             <h3 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Connect with Me</h3>
+                            <div class="flex justify-center space-x-6 text-3xl">
+                                <a href="https://github.com/Kaushik-verse" target="_blank" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors" aria-label="GitHub"><i class="fab fa-github"></i></a>
+                                <a href="https://www.linkedin.com/in/sai-kaushik-chunduri-a6130228b/" target="_blank" class="text-gray-600 dark:text-gray-400 hover:text-blue-700 dark:hover:text-blue-500 transition-colors" aria-label="LinkedIn"><i class="fab fa-linkedin"></i></a>
+                                <a href="mailto:chundurisaikaushik@gmail.com" class="text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-500 transition-colors" aria-label="Email"><i class="fas fa-envelope"></i></a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Mobile Navigation -->
+        <nav class="md:hidden fixed bottom-4 left-4 right-4 h-20 glass-card rounded-2xl shadow-xl z-50">
+            <div class="flex justify-around items-center h-full">
+                <a href="#" class="nav-link flex flex-col items-center text-gray-600 dark:text-gray-300 w-1/4 h-full justify-center rounded-l-2xl" data-page="home">
+                    <i class="fas fa-home text-2xl"></i><span class="text-xs mt-1">Home</span>
+                </a>
+                <a href="#" class="nav-link flex flex-col items-center text-gray-600 dark:text-gray-300 w-1/4 h-full justify-center" data-page="history">
+                     <i class="fas fa-history text-2xl"></i><span class="text-xs mt-1">History</span>
+                </a>
+                <a href="#" class="nav-link flex flex-col items-center text-gray-600 dark:text-gray-300 w-1/4 h-full justify-center" data-page="analytics">
+                    <i class="fas fa-chart-bar text-2xl"></i><span class="text-xs mt-1">Analytics</span>
+                </a>
+                 <a href="#" class="nav-link flex flex-col items-center text-gray-600 dark:text-gray-300 w-1/4 h-full justify-center rounded-r-2xl" data-page="developer">
+                    <i class="fas fa-code text-2xl"></i><span class="text-xs mt-1">Developer</span>
+                </a>
+            </div>
+        </nav>
+
+        <!-- Footer -->
+        <footer class="mt-auto pt-20 pb-24 md:pb-0 text-center text-gray-600 dark:text-gray-400 text-sm">
+            <p>&copy; 2025 LeafGuard AI. All Rights Reserved.</p>
+        </footer>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- STATE MANAGEMENT ---
+    let state = {
+        currentPage: 'home',
+        history: JSON.parse(localStorage.getItem('plantHistory')) || [],
+    };
+
+    // --- DOM ELEMENTS ---
+    const pageElements = document.querySelectorAll('.page');
+    const navLinks = document.querySelectorAll('.nav-link');
+    const themeToggleButton = document.getElementById('theme-toggle');
+    const fileDropArea = document.getElementById('file-drop-area');
+    const fileInput = document.getElementById('file-input');
+    const resultSection = document.getElementById('result-section');
+    const imagePreview = document.getElementById('image-preview');
+    const resultDetails = document.getElementById('result-details');
+    const historyGallery = document.getElementById('history-gallery');
+    const noHistoryMsg = document.getElementById('no-history-msg');
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    const analyticsChartCanvas = document.getElementById('analytics-chart');
+    const desktopNav = document.getElementById('desktop-nav');
+    let analyticsChart = null;
+
+    // --- THEME TOGGLE ---
+    themeToggleButton.addEventListener('click', () => {
+        document.documentElement.classList.toggle('dark');
+        localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        // Re-render chart with new theme colors
+        if (state.currentPage === 'analytics') {
+            renderAnalyticsChart();
+        }
+    });
+
+    // --- NAVIGATION & LIQUID ANIMATION ---
+    const moveIndicator = (activeLink) => {
+        if (!activeLink || !desktopNav || window.innerWidth < 768) return;
+        const left = activeLink.offsetLeft;
+        const width = activeLink.offsetWidth;
+        desktopNav.style.setProperty('--indicator-left', `${left}px`);
+        desktopNav.style.setProperty('--indicator-width', `${width}px`);
+    };
+
+    const showPage = (pageId) => {
+        state.currentPage = pageId;
+        pageElements.forEach(page => page.classList.toggle('active', page.id === `${pageId}-page`));
+
+        let activeDesktopLink = null;
+        navLinks.forEach(link => {
+            const isTarget = link.dataset.page === pageId;
+            link.classList.toggle('active', isTarget);
+            if(isTarget && link.closest('#desktop-nav')) {
+                activeDesktopLink = link;
+            }
+        });
+
+        // Delay indicator move slightly for smoother page transition feel
+        setTimeout(() => moveIndicator(activeDesktopLink), 50);
+
+        if (pageId === 'history') renderHistory();
+        if (pageId === 'analytics') renderAnalyticsChart();
+    };
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            showPage(link.dataset.page);
+        });
+    });
+
+    // --- API & FILE HANDLING ---
+    const handleFileSelect = (file) => {
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imageSrc = e.target.result;
+                imagePreview.src = imageSrc;
+                resultSection.classList.remove('hidden');
+                resultSection.classList.add('fade-in');
+                resultDetails.innerHTML = `
+                    <div id="loader" class="text-center w-full">
+                        <i class="fas fa-spinner fa-spin text-5xl text-blue-500"></i>
+                        <p class="mt-4 text-xl text-gray-700 dark:text-gray-300">Analyzing...</p>
+                    </div>`;
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                fetch('http://127.0.0.1:8000/disease-detection-file', {
+                    method: 'POST',
+                    body: formData,
+                })
+                .then(response => response.ok ? response.json() : Promise.reject(new Error(`Server responded with status: ${response.status}`)))
+                .then(data => {
+                    if (data.error) return Promise.reject(new Error(data.error));
+                    displayPredictionResult(data);
+                    addToHistory({ id: Date.now(), imageSrc, ...data });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    resultDetails.innerHTML = `
+                        <div class="text-center text-red-500 fade-in w-full">
+                            <i class="fas fa-times-circle text-5xl"></i>
+                            <p class="mt-3 font-bold text-xl">Prediction Failed</p>
+                            <p class="text-md text-gray-600 dark:text-gray-400">${error.message || "An unknown error occurred."}</p>
+                        </div>`;
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const displayPredictionResult = (data) => {
+        const { disease_name, confidence, severity, symptoms, treatment } = data;
+        const isHealthy = (disease_name || '').toLowerCase().includes('healthy');
+        const accentColor = isHealthy ? 'green' : 'orange';
+
+        const createList = (title, items) => {
+            if (!items || items.length === 0) return '';
+            return `
+                <div class="mt-4">
+                    <h5 class="font-bold text-lg mb-2 text-gray-800 dark:text-gray-200">${title}</h5>
+                    <ul class="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+                        ${items.map(item => `<li>${item}</li>`).join('')}
+                    </ul>
+                </div>`;
+        };
+
+        resultDetails.innerHTML = `
+            <div class="fade-in text-left w-full space-y-3">
+                <div>
+                    <p class="text-4xl font-bold text-gray-800 dark:text-white">${disease_name || 'N/A'}</p>
+                    <span class="px-3 py-1 mt-2 inline-block text-sm font-semibold rounded-full bg-${accentColor}-100 dark:bg-${accentColor}-900/50 text-${accentColor}-800 dark:text-${accentColor}-300">
+                       Severity: ${severity || 'N/A'}
+                    </span>
+                </div>
+                <div>
+                     <p class="text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Confidence Score</p>
+                     <p class="text-3xl font-bold text-gray-800 dark:text-white">${confidence}%</p>
+                </div>
+                <div class="pt-2">
+                    ${createList('Symptoms', symptoms)}
+                    ${createList('Treatment Recommendations', treatment)}
+                </div>
+            </div>`;
+    };
+
+    fileDropArea.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files[0]));
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => fileDropArea.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }));
+    ['dragenter', 'dragover'].forEach(eventName => fileDropArea.addEventListener(eventName, () => fileDropArea.classList.add('drag-over')));
+    ['dragleave', 'drop'].forEach(eventName => fileDropArea.addEventListener(eventName, () => fileDropArea.classList.remove('drag-over')));
+    fileDropArea.addEventListener('drop', (e) => handleFileSelect(e.dataTransfer.files[0]));
+
+    // --- HISTORY LOGIC ---
+    const saveHistory = () => localStorage.setItem('plantHistory', JSON.stringify(state.history));
+    const addToHistory = (item) => {
+        state.history.unshift(item);
+        if (state.history.length > 20) state.history.pop();
+        saveHistory();
+    };
+
+    const renderHistory = () => {
+        noHistoryMsg.classList.toggle('hidden', state.history.length > 0);
+        historyGallery.classList.toggle('hidden', state.history.length === 0);
+        clearHistoryBtn.disabled = state.history.length === 0;
+
+        historyGallery.innerHTML = state.history.map(item => {
+            const isHealthy = (item.disease_name || '').toLowerCase().includes('healthy');
+            const accentColor = isHealthy ? 'green' : 'orange';
+            return `
+                <div class="glass-card rounded-2xl shadow-lg overflow-hidden transform hover:scale-105 hover:-translate-y-2 transition-transform duration-300">
+                    <img src="${item.imageSrc}" alt="Plant leaf" class="h-56 w-full object-cover">
+                    <div class="p-5 border-t-4 border-${accentColor}-500 dark:border-${accentColor}-400">
+                        <p class="text-xl font-bold text-gray-800 dark:text-white">${item.disease_name || 'N/A'}</p>
+                        <p class="text-md text-gray-600 dark:text-gray-400">Confidence: ${item.confidence}%</p>
+                    </div>
+                </div>`;
+        }).join('');
+    };
+
+    clearHistoryBtn.addEventListener('click', () => {
+        // Using a custom modal would be better in a real app, but confirm is simple for this context.
+        if (window.confirm('Are you sure you want to clear the entire prediction history?')) {
+            state.history = [];
+            saveHistory();
+            renderHistory();
+        }
+    });
+
+    // --- ANALYTICS LOGIC ---
+    const renderAnalyticsChart = () => {
+        if (!analyticsChartCanvas) return;
+        const ctx = analyticsChartCanvas.getContext('2d');
+
+        const diseaseCounts = state.history.reduce((acc, item) => {
+            const name = item.disease_name || 'Unknown';
+            acc[name] = (acc[name] || 0) + 1;
+            return acc;
+        }, {});
+
+        const labels = Object.keys(diseaseCounts);
+        const data = Object.values(diseaseCounts);
+
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        const textColor = isDarkMode ? '#e5e7eb' : '#374151';
+
+        const chartData = {
+            labels: labels,
+            datasets: [{
+                label: 'Prediction Count',
+                data: data,
+                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 2,
+                borderRadius: 8,
+            }]
+        };
+
+        if (analyticsChart) {
+            analyticsChart.destroy();
+        }
+
+        analyticsChart = new Chart(ctx, {
+            type: 'bar',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'Count of Detections by Disease Type',
+                        font: { size: 20, weight: 'bold' },
+                        color: textColor
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1, color: textColor },
+                        grid: { color: gridColor }
+                    },
+                    x: {
+                        ticks: { color: textColor, font: { size: 14 } },
+                        grid: { color: 'transparent' }
+                    }
+                },
+                animation: { duration: 1000, easing: 'easeInOutQuart' }
+            }
+        });
+    };
+
+    // --- INITIALIZATION ---
+    window.addEventListener('resize', () => {
+        const activeLink = document.querySelector('#desktop-nav .nav-link.active');
+        moveIndicator(activeLink);
+    });
+
+    showPage('home');
+});
+</script>
+
+</body>
+</html>
